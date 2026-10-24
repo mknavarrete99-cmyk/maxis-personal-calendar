@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#241738"><meta name="description" content="A private purple and green personal calendar, synced to Discord and shown in Eastern Time.">
+<title>Maxi's Calendar · All in One Place</title>
+<link rel="stylesheet" href="/styles.css">
+<script type="module" defer src="/app.js"></script>
+</head>
+<body>
+  <div id="login" class="login-screen" hidden>
+    <div class="login-decoration"><div class="orbit-large">◎</div><div class="glimmer g1">✦</div><div class="glimmer g2">✧</div><div class="glimmer g3">✦</div></div>
+    <form id="login-form" class="login-panel">
+      <div class="brand-mark big">✦</div>
+      <p class="eyebrow centered">A little space just for you</p>
+      <h1>Your days, your way.</h1>
+      <p class="login-intro">A pretty little space for your plans, appointments and everything in between.</p>
+      <label for="password">Calendar password</label>
+      <input type="password" name="password" id="password" placeholder="Enter your password" autocomplete="current-password" required>
+      <button class="primary full" type="submit">Unlock my calendar <span>→</span></button>
+      <p id="login-error" class="form-error" role="alert"></p>
+      <p class="tiny-note">Private access · Eastern Time (EST / EDT)</p>
+    </form>
+  </div>
+  <div id="app" class="app-shell" hidden>
+    <aside class="sidebar" id="sidebar">
+      <div class="brand"><div class="brand-mark">✦</div><div><span class="brand-overline">YOUR EVERYDAY PLANNER</span><strong>Maxi's Calendar</strong></div></div>
+      <button class="primary add-side" data-open-add><span class="plus">+</span> New event</button>
+      <div class="side-section-title">YOUR SPACE</div>
+      <nav class="nav-links" aria-label="Calendar views">
+        <button class="nav-item selected" data-nav="month"><span>▦</span> Calendar</button>
+        <button class="nav-item" data-nav="week"><span>≡</span> This week</button>
+        <button class="nav-item" data-nav="agenda"><span>☷</span> All upcoming</button>
+      </nav>
+      <div class="side-section-title category-header">CALENDARS</div>
+      <div id="category-filters" class="filters"></div>
+      <div class="sidebar-bottom">
+        <div class="sync-card"><span class="small-star">✧</span><div><strong>Discord companion</strong><p id="sidebar-sync-status">Checking connection…</p></div></div>
+        <button class="outline-btn full" id="sync-btn">↻ Refresh Discord</button>
+        <button class="signout" id="logout-btn">Sign out</button>
+      </div>
+    </aside>
+    <div class="main-pane">
+      <header class="topbar">
+        <button class="mobile-menu" id="menu-btn" aria-label="Toggle menu">☰</button>
+        <div class="breadcrumbs">PERSONAL PLANNER <span>/</span> <strong id="breadcrumb-label">Calendar</strong></div>
+        <div class="topbar-right"><span class="timezone-chip">◷ Eastern Time</span><button class="avatar" title="Private calendar">M</button></div>
+      </header>
+      <main class="content">
+        <div class="page-intro"><div><p class="eyebrow">✦ ALL YOUR PLANS, ONE PLACE</p><h1>All your plans, <em>one happy place.</em></h1><p class="subtitle">Every appointment, gathering and little plan — beautifully in sync.</p></div><button class="primary top-add" data-open-add>＋ Add event</button></div>
+        <div id="feedback" class="feedback" role="status" hidden></div>
+        <div class="stats-row"><div class="stat-card"><div class="stat-icon lilac">▦</div><div><div class="stat-label">COMING UP THIS WEEK</div><strong id="week-count">0</strong><span>events planned</span></div></div><div class="stat-card"><div class="stat-icon mint">◉</div><div><div class="stat-label">NEXT ON YOUR LIST</div><strong id="next-date">—</strong><span id="next-title">A little breathing room</span></div></div><div class="stat-card"><div class="stat-icon green">↗</div><div><div class="stat-label">DISCORD SCHEDULE</div><strong id="sync-label">Not connected</strong><span id="sync-small">Awaiting setup</span></div></div></div>
+        <div class="work-layout"><section class="calendar-panel">
+          <div class="calendar-toolbar"><div><p class="overline">YOUR CALENDAR</p><h2 id="calendar-heading">October 2026</h2></div><div class="calendar-actions"><button id="today-btn" class="small-button">Today</button><button id="prev-btn" class="arrow-btn" aria-label="Previous">‹</button><button id="next-btn" class="arrow-btn" aria-label="Next">›</button><div class="tab-control" role="group" aria-label="Calendar view"><button class="tab active" data-tab="month">Month</button><button class="tab" data-tab="week">Week</button><button class="tab" data-tab="agenda">Agenda</button></div></div></div>
+          <div id="month-view"><div class="weekday-row"><span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span></div><div class="month-grid" id="month-grid"></div></div>
+          <div id="list-view" class="list-view" hidden></div>
+          <div class="calendar-footer"><span><span class="dot legend-dot"></span> All times are automatically shown in Eastern Time</span><span>💚 A little space for everything.</span></div>
+        </section><aside class="right-rail"><section class="upcoming-panel"><div class="panel-heading"><div><p class="overline">LOOKING AHEAD</p><h3>Up next <span>✦</span></h3></div><button class="linkish" data-agenda>View all →</button></div><div id="up-next"></div></section><section class="note-panel"><div class="corner-orbit">◎</div><p>JUST FOR YOU</p><h3>Life happens. You’ve got a place for it all.</h3><span>Update your calendar here, and the shared Discord message updates with it — no reposting needed.</span><div class="accent-line">● · ● · ●</div></section></aside></div>
+      </main>
+    </div>
+  </div>
+  <dialog id="event-dialog" class="event-dialog"><form id="event-form" novalidate><div class="modal-top"><div><p class="eyebrow">💜 YOUR PLANNER</p><h2 id="modal-title">Add a new event</h2></div><button type="button" class="close-btn" id="close-modal" aria-label="Close">×</button></div>
+    <input name="id" id="event-id" type="hidden">
+    <div class="form-grid"><div class="form-field full"><label for="event-title">What's on the calendar? <b>*</b></label><input id="event-title" name="title" maxlength="110" placeholder="e.g. Friday appointment or weekend plans" required></div>
+      <div class="form-field full"><label for="event-category">Category <b>*</b></label><select id="event-category" name="category"><option value="appointments">📅 Appointments</option><option value="groups">🌿 Groups & communities</option><option value="meetings">🗓️ Meetings & events</option><option value="learning">📚 Classes & learning</option><option value="personal">💜 Personal</option></select></div>
+      <div class="form-field"><label for="event-date">Date <b>*</b></label><input id="event-date" name="date" type="date" required></div><div class="form-field"><label for="event-time">Time · Eastern <b>*</b></label><input id="event-time" name="time" type="time" required></div>
+      <div class="form-field"><label for="event-duration">Duration</label><select name="duration" id="event-duration"><option value="15">15 minutes</option><option value="30">30 minutes</option><option value="45">45 minutes</option><option value="60" selected>1 hour</option><option value="90">1½ hours</option><option value="120">2 hours</option><option value="180">3 hours</option><option value="240">4 hours</option></select></div>
+      <div class="form-field"><label for="event-recurrence">Repeats</label><select id="event-recurrence" name="recurrence"><option value="none">Doesn't repeat</option><option value="weekly">Every week</option><option value="monthly">Every month</option></select></div>
+      <div class="form-field full" id="until-holder" hidden><label for="event-until">Repeat until (optional)</label><input type="date" id="event-until" name="until"><small>If left blank, it repeats until you change or delete it.</small></div>
+      <div class="form-field full"><label for="event-location">Where? (optional)</label><input id="event-location" name="location" maxlength="160" placeholder="Second Life / Discord / in-world location"></div>
+      <div class="form-field full"><label for="event-notes">Private notes (optional)</label><textarea id="event-notes" name="notes" maxlength="1200" rows="3" placeholder="Personal reminders, meeting details, or anything just for you…"></textarea><small>Notes stay in your password-protected calendar and never go to Discord. Avoid including patient-identifying information.</small></div>
+      <div class="share-box full"><label class="switch-line" for="event-share"><span><strong>Show on Discord</strong><small id="share-description">The event's name and time will appear in the shared schedule.</small></span><input type="checkbox" id="event-share" name="share" checked><span class="toggle-ui" aria-hidden="true"></span></label></div>
+    </div><p class="form-error" id="event-error" role="alert"></p><div class="modal-footer"><button type="button" class="danger-text" id="delete-event" hidden>Delete event</button><span class="fill-space"></span><button type="button" class="small-button" id="cancel-event">Cancel</button><button class="primary" id="save-event" type="submit">Save event <span>→</span></button></div>
+  </form></dialog>
+</body></html>

@@ -10,3 +10,44 @@ test('Discord summary hides appointment title and all private notes, permits no 
   const now=new Date('2026-10-25T12:00:00Z');const events=[base,{...base,id:'z',category:'appointments',title:'Patient Jane Medical Appointment',notes:'super secret',time:'11:00'},{...base,id:'q',title:'@everyone secret plan',share:false}];const msg=discordPayload(events,now);const raw=JSON.stringify(msg);
   assert.match(raw,/Team meetup/);assert.match(raw,/Appointment/);assert.doesNotMatch(raw,/Clinic appointment|Vespertine/);assert.doesNotMatch(raw,/Patient Jane|super secret|PRIVATE|@everyone/);assert.deepEqual(msg.allowed_mentions,{parse:[]});
 });
+
+test('accepts an event with no time and rejects invalid non-empty times',()=>{
+  const event=normaliseEvent({...base,time:'',location:'Discord voice lounge'});
+  assert.equal(event.time,'');
+  assert.equal(event.location,'Discord voice lounge');
+  assert.throws(()=>normaliseEvent({...base,time:'24:00'}));
+  assert.throws(()=>normaliseEvent({...base,time:'not sure'}));
+});
+test('Discord shows location and Time TBD, but never private notes, and updates when time is assigned',()=>{
+  const now=new Date('2026-10-25T12:00:00Z');
+  const draft=normaliseEvent({...base,time:'',location:'Second Life · Green River',notes:'Private reminder',share:true});
+  const initial=discordPayload([{...draft,id:'a'}],now);
+  assert.match(initial.embeds[0].description,/Time TBD — Team meetup/);
+  assert.match(initial.embeds[0].description,/📍 Second Life · Green River/);
+  assert.doesNotMatch(JSON.stringify(initial),/Private reminder/);
+  const edited=normaliseEvent({...draft,time:'19:45',location:'Discord VC',share:true});
+  const updated=discordPayload([{...edited,id:'a'}],now);
+  assert.match(updated.embeds[0].description,/7:45 PM — Team meetup/);
+  assert.match(updated.embeds[0].description,/📍 Discord VC/);
+  assert.doesNotMatch(updated.embeds[0].description,/Time TBD/);
+});
+test('untimed events sort after timed events on a day',()=>{
+  const a={...base,id:'a',time:'',title:'Unknown time'};
+  const b={...base,id:'b',time:'08:15',title:'Early event'};
+  const events=expandEvents([a,b],'2026-10-26','2026-10-26');
+  assert.deepEqual(events.map(e=>e.title),['Early event','Unknown time']);
+});
+test('Discord generalizes appointment title but shows explicitly shared location safely',()=>{
+  const event={...base,category:'appointments',title:'Private patient full name',location:'@everyone\nPrivate room',time:'',notes:'do not share'};
+  const result=discordPayload([event],new Date('2026-10-25T12:00:00Z'));
+  const out=JSON.stringify(result);
+  assert.match(out,/Time TBD — Appointment/);
+  assert.match(out,/📍 ＠everyone Private room/);
+  assert.doesNotMatch(out,/Private patient full name|do not share/);
+  assert.deepEqual(result.allowed_mentions,{parse:[]});
+});
+
+test('Discord shows location pending when none entered',()=>{
+  const result=discordPayload([{...base,location:''}],new Date('2026-10-25T12:00:00Z'));
+  assert.match(result.embeds[0].description,/📍 Location TBD/);
+});

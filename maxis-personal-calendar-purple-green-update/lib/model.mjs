@@ -96,7 +96,7 @@ export function discordPayload(events, now = new Date()) {
     const category=CATEGORY_INFO[e.category] || CATEGORY_INFO.personal;
     const label=e.category==='appointments'?'Appointment':e.title;
     const head=e.occurrenceDate===previousDay?'':`\n**${readableDate(e.occurrenceDate)}**\n`;
-    const location=e.location ? `   📍 ${safeDiscord(e.location,160)}\n` : '';
+    const location=`   📍 ${e.location ? safeDiscord(e.location,160) : 'Location TBD'}\n`;
     const line=`${head}${category.icon} ${readableTime(e.time)} — ${safeDiscord(label)}${e.recurrence!=='none'?' ↻':''}\n${location}`;
     if (shown>=55 || text.length+line.length>3550) break;
     text+=line;shown++;previousDay=e.occurrenceDate;

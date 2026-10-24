@@ -42,7 +42,7 @@ export function normaliseEvent(v) {
   if (!title) throw new Error('Please add an event name.');
   if (!CATEGORIES.includes(category)) throw new Error('Choose an event category.');
   if (!dateValid(date)) throw new Error('Choose a valid event date.');
-  if (!timeRe.test(time)) throw new Error('Choose a valid event time.');
+  if (time && !timeRe.test(time)) throw new Error('Choose a valid time or leave it blank for Time TBD.');
   if (!Number.isInteger(duration)||duration<15||duration>720) throw new Error('Duration must be between 15 and 720 minutes.');
   if (!['none','weekly','monthly'].includes(recurrence)) throw new Error('Invalid repeat option.');
   if (until && (!dateValid(until)||until<date)) throw new Error('The repeat end date must be after the start date.');
@@ -75,17 +75,18 @@ export function expandEvents(events, from, through) {
       }
     } else put(e.date);
   }
-  return result.sort((a,b)=> (a.occurrenceDate+a.time+a.title).localeCompare(b.occurrenceDate+b.time+b.title));
+  return result.sort((a,b)=> (a.occurrenceDate+(a.time || '99:99')+a.title).localeCompare(b.occurrenceDate+(b.time || '99:99')+b.title));
 }
 export function readableDate(date, opts={weekday:'long', month:'short', day:'numeric'}) {
   return new Intl.DateTimeFormat('en-US',{...opts,timeZone:'UTC'}).format(new Date(`${date}T12:00:00Z`));
 }
 export function readableTime(t) {
+  if (!t) return 'Time TBD';
   const [h,m]=t.split(':').map(Number);
   return `${h%12||12}:${String(m).padStart(2,'0')} ${h<12?'AM':'PM'}`;
 }
-export function safeDiscord(s) {
-  return String(s).replace(/@/g,'＠').replace(/([\\*_~`|>])/g,'\\$1').replace(/[\r\n]+/g,' ').slice(0,115);
+export function safeDiscord(s, limit=115) {
+  return String(s).replace(/[\r\n\t]+/g,' ').replace(/@/g,'＠').replace(/([\\*_~`|>])/g,'\\$1').slice(0,limit);
 }
 export function discordPayload(events, now = new Date()) {
   const start=todayEastern(now), end=addDays(start,44);
@@ -95,7 +96,8 @@ export function discordPayload(events, now = new Date()) {
     const category=CATEGORY_INFO[e.category] || CATEGORY_INFO.personal;
     const label=e.category==='appointments'?'Appointment':e.title;
     const head=e.occurrenceDate===previousDay?'':`\n**${readableDate(e.occurrenceDate)}**\n`;
-    const line=`${head}${category.icon} ${readableTime(e.time)} — ${safeDiscord(label)}${e.recurrence!=='none'?' ↻':''}\n`;
+    const location=`   📍 ${e.location ? safeDiscord(e.location,160) : 'Location TBD'}\n`;
+    const line=`${head}${category.icon} ${readableTime(e.time)} — ${safeDiscord(label)}${e.recurrence!=='none'?' ↻':''}\n${location}`;
     if (shown>=55 || text.length+line.length>3550) break;
     text+=line;shown++;previousDay=e.occurrenceDate;
   }

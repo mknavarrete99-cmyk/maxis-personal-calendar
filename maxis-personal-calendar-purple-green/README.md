@@ -7,12 +7,12 @@ It is a **separate project** from the old Discord slash-command bot. You do **no
 ## What it does
 
 - Password-protected personal calendar with **Month / Week / Agenda** views and category filters.
-- Create, update and delete appointments; save private locations and notes; set durations.
+- Create, edit and delete events, including entries without a confirmed time. Untimed events show as **Time TBD** until you edit in a time later. Set a location, duration, and private notes.
 - Optional **weekly / monthly repeats** (editing or deleting an event edits its entire series; there are no one-off exceptions yet).
 - Toggle **Show on Discord** for each event.
 - Every save/delete updates **the same webhook message** in your Discord channel rather than posting duplicates. You may pin that message in Discord once it appears. It shows shared events in the **next 45 days**, up to Discord's message length limit.
 - **Automatic daily refresh** of that message so the date range keeps rolling even when nothing gets edited. It runs around **7:20 AM EST / 8:20 AM EDT**; it is a refresh, not a notification ping.
-- Every **Appointments** event is deliberately generalized to **“Appointment”** in Discord with its time; patient names and private notes are never sent. Other shared categories show their event titles, but never their location or notes.
+- Events with **Show on Discord** enabled display their **date, time (or Time TBD), and location** if provided. Appointments are deliberately generalized to **“Appointment”** (the event title is hidden), and private notes are never sent. Do not put patient-identifying details in location text.
 - Calendar data is stored in site-scoped **Netlify Blobs**, not a Supabase database.
 
 **Important:** The project does not automatically pull appointments from any existing calendar. Add those to this private planner manually for now. A later integration could sync them, but that requires knowing how the original calendar stores its events.
@@ -65,8 +65,8 @@ After setting them, **trigger a new Netlify deploy** if the application was alre
 
 Open your new `https://your-project.netlify.app` address. Enter your `ADMIN_PASSWORD`.
 
-- Press **Add event**, name it, choose one of the five calendars, add a date and time **in Eastern Time**, then save.
-- Leave **Show on Discord** checked if Livy should see the entry. For an Appointments event, Discord only receives the generic title **Appointment**, plus its date and time.
+- Press **Add event**, name it, choose one of the five calendars, add a date and optionally a time **in Eastern Time**, then save. Leave the time empty if undecided: the calendar and Discord will show **Time TBD**, and you can click the event to edit it later.
+- Leave **Show on Discord** checked if Livy should see the entry. For an Appointments event, Discord only receives the generic title **Appointment**, plus its date, time (or Time TBD), and location if entered.
 - The first save creates the webhook message; later edits update that same message. Alternatively, press **Refresh Discord** to create an initial “no appointments” message.
 - **Pin the message** in the channel yourself if you want to keep it easy to find. Discord webhooks don't pin messages on their own.
 - Want an event just for you? Uncheck **Show on Discord**. It stays in the private planner but isn't sent to the channel.
@@ -78,10 +78,12 @@ If Discord fails during a save, the calendar **still saves** the appointment and
 > **💜💚 Maxi's Schedule · Upcoming Plans**  
 > **Monday, October 26**  
 > 📅 11:00 AM — Appointment  
-> 🌿 7:00 PM — Group catch-up  
+> &nbsp;&nbsp; 📍 Second Life  
+> 🌿 Time TBD — Group catch-up  
+> &nbsp;&nbsp; 📍 Discord voice chat  
 > **Tuesday, October 27**  
 > 🗓️ 8:00 PM — Team meeting  
-> 
+>
 > *Eastern Time (EST/EDT) · Next 45 days*
 
 The starter calendar is **empty**, with no fabricated events.
@@ -93,13 +95,19 @@ The starter calendar is **empty**, with no fabricated events.
 - All cloud-stored appointment data resides in **Netlify Blobs**. Blobs has usage limits and is not a relational database. It is appropriate for a small personal calendar with infrequent updates; it is not intended as a multi-user scheduling platform.
 - Appointments are **not yet imported or synchronized** from another calendar. No external calendar provider is connected.
 - The Discord message displays the **upcoming 45 days**, not a full multi-year history, and long schedules may be truncated by Discord's embed limits.
-- Only the shared events are sent to Discord. Private notes and locations are never sent. Appointments entries are generalized by design.
+- Only shared events are sent to Discord. **Locations are shown** for shared events if entered; private notes are never sent. Appointments entries are generalized by design.
 - The webhook message is *edited*, so editing the calendar does **not** send a new Discord notification or ping every time. It keeps the channel clean.
-- The calendar's dates and clock times are entered as **Eastern wall time**. Weekly repeats keep their local time across daylight-saving transitions.
+- The calendar's dates and optional clock times are entered as **Eastern wall time**. Weekly repeats keep their local time across daylight-saving transitions.
 - Netlify scheduled refresh uses UTC and thus changes its local time between EST and EDT; this is harmless because it's not a user-facing appointment.
 - If your webhook is deleted or the Discord message is removed, clicking **Refresh Discord** creates a new message.
 - Be careful with GitHub pull-request **Deploy Previews** and Netlify Blobs (site-scoped Blobs are shared between deploys). The application blocks access via its API on branch deploys and deploy previews to protect production events. Use your published production address for the real calendar.
 - You can change `ADMIN_PASSWORD` or `SESSION_SECRET` in Netlify to revoke existing sessions (changing the password alone does not revoke an already-issued session until the cookie expires; rotate **both** to revoke sessions immediately).
+
+## Updating your existing live calendar
+
+If you already deployed the purple-and-green version to Netlify from GitHub, **do not make a new Netlify site**. Extract this updated ZIP, upload/replace the code files **in the same GitHub repository** (commit the changes), and Netlify should deploy the update to the same URL. **Do not delete the existing Netlify site**, since its site-scoped Netlify Blobs store your saved events and Discord message ID. Keep your existing three Netlify environment variables: `ADMIN_PASSWORD`, `SESSION_SECRET`, and `DISCORD_WEBHOOK_URL`.
+
+After the deploy, open the calendar, add an event with a date but no time and a location, keep **Show on Discord** on, and save. Discord should display **Time TBD** and **📍 location**. Click that event to edit its time later. The same Discord message should update.
 
 ## Testing and troubleshooting
 

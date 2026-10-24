@@ -22,3 +22,5 @@ REMEMBER:
 - Existing calendars do NOT auto-sync yet; add your events manually.
 - Do not store patient names/medical information here.
 - Keep the webhook URL and passwords out of GitHub and screenshots.
+
+UPDATE: Events may have no time: leave Time blank to show Time TBD. Shared Discord events show location when filled in. Existing Netlify site can be updated by replacing repository files and committing; keep the same site and secrets.

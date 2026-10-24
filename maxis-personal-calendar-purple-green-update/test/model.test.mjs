@@ -46,3 +46,8 @@ test('Discord generalizes appointment title but shows explicitly shared location
   assert.doesNotMatch(out,/Private patient full name|do not share/);
   assert.deepEqual(result.allowed_mentions,{parse:[]});
 });
+
+test('Discord shows location pending when none entered',()=>{
+  const result=discordPayload([{...base,location:''}],new Date('2026-10-25T12:00:00Z'));
+  assert.match(result.embeds[0].description,/📍 Location TBD/);
+});

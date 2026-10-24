@@ -1,0 +1,26 @@
+MAXI'S CALENDAR  |  QUICK START
+
+1. Unzip this folder and upload its contents to a new GitHub repository.
+2. In Discord, go to your server/channel Integrations > Webhooks > New Webhook.
+   Pick a channel that Livy can view and copy the webhook URL.
+3. Connect the GitHub repository to Netlify (Import existing project).
+4. In Netlify Project configuration > Environment variables, add:
+      ADMIN_PASSWORD       = a private unique password
+      SESSION_SECRET       = a long separate random string (32+ characters)
+      DISCORD_WEBHOOK_URL  = your Discord webhook URL
+5. Redeploy, visit your Netlify website, and sign in.
+6. Add appointments. Check "Show on Discord" for anything Livy should see.
+   For Appointments entries, Discord shows only "Appointment" and the time.
+7. Your first save creates a single Discord schedule message. Pin it there!
+   Future edits update the same message. Every morning it also refreshes.
+
+FULL STEP-BY-STEP INSTRUCTIONS: README.md
+
+REMEMBER:
+- All times use Eastern Time (EST/EDT).
+- No Supabase or Discord bot token is needed.
+- Existing calendars do NOT auto-sync yet; add your events manually.
+- Do not store patient names/medical information here.
+- Keep the webhook URL and passwords out of GitHub and screenshots.
+
+UPDATE: Events may have no time: leave Time blank to show Time TBD. Shared Discord events show location when filled in. Existing Netlify site can be updated by replacing repository files and committing; keep the same site and secrets.

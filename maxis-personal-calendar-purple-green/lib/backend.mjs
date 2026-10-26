@@ -1,5 +1,5 @@
 import {getStore} from '@netlify/blobs';
-import {discordPayload} from './model.mjs';
+import {discordPayload,discordChangePayload} from './model.mjs';
 
 const store = () => getStore({name:'maxi-private-calendar-v1',consistency:'strong'});
 const KEY='calendar', MSG_KEY='discord-message';
@@ -28,7 +28,7 @@ async function requestDiscord(url, method, body) {
   if(!response.ok) {const info=(await response.text()).slice(0,180); const error=new Error(`Discord returned ${response.status}: ${info}`);error.status=response.status;throw error;}
   return await response.json();
 }
-export async function syncDiscord(now=new Date()) {
+export async function syncDiscord(now=new Date(), change=null) {
   const url=webhook();
   if(!url) {const outcome={ok:false,configured:false,error:'Add DISCORD_WEBHOOK_URL to Netlify to connect your Discord channel.',updatedAt:null};await store().setJSON('discord-sync',outcome);return outcome;}
   if(!validWebhook(url)) {const outcome={ok:false,configured:false,error:'Your Discord webhook URL is not valid.',updatedAt:null};await store().setJSON('discord-sync',outcome);return outcome;}
@@ -47,7 +47,19 @@ export async function syncDiscord(now=new Date()) {
       messageId=message.id;
       await bucket.setJSON(MSG_KEY,{id:messageId});
     }
-    const state={ok:true,configured:true,error:null,updatedAt:now.toISOString(),revision:calendar.revision};
+    // Updates made from the calendar create a new notification; manual/daily refresh does not.
+    const changePayload=discordChangePayload(change,now);
+    let notice={sent:false};
+    if(changePayload){
+      try {
+        await requestDiscord(`${url}?wait=true`,'POST',changePayload);
+        notice={sent:true};
+      } catch(err){
+        console.error('Calendar change alert failed:',err);
+        notice={sent:false,error:`Discord announcement failed: ${String(err.message||err).slice(0,160)}`};
+      }
+    }
+    const state={ok:true,configured:true,error:null,updatedAt:now.toISOString(),revision:calendar.revision,notice};
     await bucket.setJSON('discord-sync',state);
     return state;
   } catch(error) {

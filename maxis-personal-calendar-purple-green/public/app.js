@@ -87,9 +87,18 @@ function closeEvent(){$('#event-dialog').close()}
 async function saveEvent(ev){ev.preventDefault();const btn=$('#save-event');btn.disabled=true;$('#event-error').textContent='';try{
   const form=new FormData($('#event-form'));
   const body={id:form.get('id')||undefined,title:form.get('title'),category:form.get('category'),date:form.get('date'),time:form.get('time'),duration:Number(form.get('duration')),recurrence:form.get('recurrence'),until:form.get('until'),location:form.get('location'),notes:form.get('notes'),share:$('#event-share').checked};
-  const res=await api('save',{method:'POST',body});state.events=res.events;state.sync=res.sync;state.focus=body.date;closeEvent();render();flash(res.sync?.ok?'Event saved and Discord schedule updated! ✨':`Event saved. Discord: ${res.sync?.error||'not connected yet.'}`,!res.sync?.ok);
+  const res=await api('save',{method:'POST',body});state.events=res.events;state.sync=res.sync;state.focus=body.date;closeEvent();render();
+  const failure=!res.sync?.ok||Boolean(res.sync?.notice?.error);
+  const message=!res.sync?.ok?`Event saved. Discord: ${res.sync?.error||'not connected yet.'}`:res.sync.notice?.error
+    ?`Event saved. Schedule updated, but ${res.sync.notice.error}`:res.sync.notice?.sent
+    ?'Event saved! Discord schedule updated and a new announcement posted. 💜💚':'Event saved and Discord schedule updated! ✨';
+  flash(message,failure);
 }catch(error){$('#event-error').textContent=error.message}finally{btn.disabled=false}}
-async function deleteEvent(){const id=$('#event-id').value;if(!id||!confirm('Remove this event (including all its repeated dates)?'))return;const btn=$('#delete-event');btn.disabled=true;try{const res=await api('delete',{method:'POST',body:{id}});state.events=res.events;state.sync=res.sync;closeEvent();render();flash(res.sync?.ok?'Event removed. Discord updated.':'Event removed. Discord needs a refresh.',!res.sync?.ok)}catch(err){$('#event-error').textContent=err.message}finally{btn.disabled=false}}
+async function deleteEvent(){const id=$('#event-id').value;if(!id||!confirm('Remove this event (including all its repeated dates)?'))return;const btn=$('#delete-event');btn.disabled=true;try{const res=await api('delete',{method:'POST',body:{id}});state.events=res.events;state.sync=res.sync;closeEvent();render();
+  const failed=!res.sync?.ok||Boolean(res.sync?.notice?.error);
+  flash(!res.sync?.ok?'Event removed. Discord needs a refresh.':res.sync.notice?.error
+    ?`Event removed. Schedule updated, but ${res.sync.notice.error}`:res.sync.notice?.sent
+    ?'Event removed! Discord schedule updated and a new announcement posted. 💜💚':'Event removed. Discord schedule updated.',failed)}catch(err){$('#event-error').textContent=err.message}finally{btn.disabled=false}}
 async function syncNow(){const btn=$('#sync-btn');btn.disabled=true;try{const res=await api('sync',{method:'POST',body:{}});state.sync=res.sync;render();flash(res.sync.ok?'Discord schedule is up to date!':res.sync.error,!res.sync.ok)}catch(e){flash(e.message,true)}finally{btn.disabled=false}}
 function setView(view){state.view=view;render();$('#sidebar').classList.remove('show')}
 function navigate(direction){if(state.view==='month')state.focus=shiftMonth(state.focus,direction);else if(state.view==='week')state.focus=addDays(state.focus,direction*7);else state.focus=addDays(state.focus,direction*30);render()}

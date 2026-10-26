@@ -1,5 +1,5 @@
 import test from 'node:test';import assert from 'node:assert/strict';
-import {normaliseEvent,expandEvents,addDays,shiftMonth,todayEastern,discordPayload,dateValid} from '../lib/model.mjs';
+import {normaliseEvent,expandEvents,addDays,shiftMonth,todayEastern,discordPayload,discordChangePayload,dateValid} from '../lib/model.mjs';
 const base={id:'x',title:'Team meetup',category:'groups',date:'2026-10-26',time:'19:00',duration:60,recurrence:'none',until:'',share:true,notes:'PRIVATE'};
 test('date verification and rollover',()=>{assert.equal(dateValid('2026-02-29'),false);assert.equal(dateValid('2028-02-29'),true);assert.equal(addDays('2026-12-31',1),'2027-01-01');assert.equal(shiftMonth('2026-01-31',1),null);});
 test('weekly repeats across daylight savings keep their eastern wall time',()=>{const e={...base,recurrence:'weekly',date:'2026-10-26',until:'2026-11-16'};assert.deepEqual(expandEvents([e],'2026-10-26','2026-11-16').map(x=>[x.occurrenceDate,x.time]),[['2026-10-26','19:00'],['2026-11-02','19:00'],['2026-11-09','19:00'],['2026-11-16','19:00']]);});
@@ -50,4 +50,35 @@ test('Discord generalizes appointment title but shows explicitly shared location
 test('Discord shows location pending when none entered',()=>{
   const result=discordPayload([{...base,location:''}],new Date('2026-10-25T12:00:00Z'));
   assert.match(result.embeds[0].description,/📍 Location TBD/);
+});
+
+test('Posts separate change alerts with date, time and location, but never notes',()=>{
+  const now=new Date('2026-10-25T12:00:00Z');
+  const event={...base,share:true,location:'Discord lounge',time:'',notes:'private medical information'};
+  for(const action of ['added','updated','removed']){
+    const alert=discordChangePayload({action,event},now);
+    const raw=JSON.stringify(alert);
+    assert.match(raw,/Team meetup|Time TBD|Discord lounge/);
+    assert.match(raw,/Time TBD/);
+    assert.match(raw,/Discord lounge/);
+    assert.doesNotMatch(raw,/private medical information/);
+    assert.deepEqual(alert.allowed_mentions,{parse:[]});
+  }
+});
+test('Private events never generate change alerts, and unshared events remain anonymous',()=>{
+  const now=new Date('2026-10-25T12:00:00Z');
+  assert.equal(discordChangePayload({action:'added',event:{...base,share:false}},now),null);
+  assert.equal(discordChangePayload(null,now),null);
+  const alert=JSON.stringify(discordChangePayload({action:'unshared'},now));
+  assert.match(alert,/no longer shared/);
+  assert.doesNotMatch(alert,/Team meetup/);
+});
+test('Announcement hides medical appointment name and safely prevents mass mentions',()=>{
+  const now=new Date('2026-10-25T12:00:00Z');
+  const medical=JSON.stringify(discordChangePayload({action:'updated',event:{...base,title:'Private Jane Patient',category:'appointments',location:'',notes:'private patient record',share:true}},now));
+  assert.match(medical,/Appointment|Location TBD/);
+  assert.doesNotMatch(medical,/Private Jane Patient|private patient record/);
+  const others=JSON.stringify(discordChangePayload({action:'added',event:{...base,title:'@everyone',location:'@here meeting',share:true}},now));
+  assert.doesNotMatch(others,/@everyone|@here/);
+  assert.match(others,/＠everyone/);
 });

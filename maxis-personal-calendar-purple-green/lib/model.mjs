@@ -115,3 +115,34 @@ export function discordPayload(events, now = new Date()) {
     }]
   };
 }
+
+
+// A new message announces shared changes; the permanent agenda is edited separately.
+// Never share hidden event details or private notes.
+export function discordChangePayload(change, now = new Date()) {
+  if (!change || !['added','updated','removed','unshared'].includes(change.action)) return null;
+  if (change.action !== 'unshared' && !change.event?.share) return null;
+  const verbs={added:'🆕 Event added',updated:'✏️ Event updated',removed:'🗑️ Event removed',unshared:'🔒 Shared schedule changed'};
+  let description;
+  if (change.action === 'unshared') {
+    description='An event is no longer shared. Its details are private.\n\n_The shared schedule above has been refreshed._';
+  } else {
+    const e=change.event;
+    const cat=CATEGORY_INFO[e.category] || CATEGORY_INFO.personal;
+    const name=e.category==='appointments'?'Appointment':e.title;
+    const label=safeDiscord(name,110);
+    const location=e.location ? safeDiscord(e.location,160) : 'Location TBD';
+    const repeating=e.recurrence==='weekly'?'\n🔁 Repeats weekly':e.recurrence==='monthly'?'\n🔁 Repeats monthly':'';
+    description=`${cat.icon} **${label}**\n🗓️ ${readableDate(e.date)} · ${readableTime(e.time)} (Eastern)\n📍 ${location}${repeating}\n\n_The shared schedule has been refreshed._`;
+  }
+  return {
+    username:'Maxi’s Calendar',
+    allowed_mentions:{parse:[]},
+    embeds:[{
+      title:`💜💚 Maxi’s Calendar · ${verbs[change.action]}`,
+      description,
+      color:change.action==='removed'||change.action==='unshared'?0xAA82E8:0x39B58A,
+      timestamp:now.toISOString()
+    }]
+  };
+}

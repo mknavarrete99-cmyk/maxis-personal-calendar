@@ -58,24 +58,30 @@ export default async (req) => {
       const body=await readBody(req), event=normaliseEvent(body);
       const id=body.id ? String(body.id) : randomUUID();
       if(!/^[0-9a-f-]{36}$/i.test(id))return respond({error:'Invalid appointment ID.'},400);
-      let updated=false;
+      let updated=false, before=null;
       const result=await updateCalendar((events)=>{
         const current=events.find(e=>e.id===id);
         if(body.id && !current)throw new Error('Appointment not found.');
         updated=Boolean(current);
+        before=current||null;
         return [...events.filter(e=>e.id!==id),{...event,id,createdAt:current?.createdAt||new Date().toISOString(),updatedAt:new Date().toISOString()}];
       });
-      const sync=await syncDiscord();
+      const changed=!before || Object.keys(event).some(key=>event[key]!==before[key]);
+      const change=!changed ? null : before?.share && !event.share ? {action:'unshared'}
+        : event.share ? {action:before?.share?'updated':'added',event} : null;
+      const sync=await syncDiscord(new Date(),change);
       return respond({ok:true,updated,eventId:id,events:result.events,sync});
     }
     if(action==='delete'&&req.method==='POST') {
       const {id}=await readBody(req);
       if(typeof id!=='string'||!/^[0-9a-f-]{36}$/i.test(id))return respond({error:'Invalid appointment ID.'},400);
+      let removed=null;
       const result=await updateCalendar((events)=>{
-        if(!events.some(e=>e.id===id))throw new Error('Appointment not found.');
+        removed=events.find(e=>e.id===id)||null;
+        if(!removed)throw new Error('Appointment not found.');
         return events.filter(e=>e.id!==id);
       });
-      const sync=await syncDiscord();
+      const sync=await syncDiscord(new Date(),removed?.share?{action:'removed',event:removed}:null);
       return respond({ok:true,events:result.events,sync});
     }
     if(action==='sync'&&req.method==='POST') {await readBody(req);return respond({sync:await syncDiscord()});}

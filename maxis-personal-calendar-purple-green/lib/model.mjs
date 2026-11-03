@@ -49,7 +49,7 @@ export function normaliseEvent(v) {
   return {
     title, category, date, time, duration, recurrence,
     until: recurrence==='none'?'':until,
-    location:clean(v.location,160), notes:clean(v.notes,1200),
+    location:clean(v.location,160), description:clean(v.description,400), notes:clean(v.notes,1200),
     share: v.share === true
   };
 }
@@ -97,7 +97,8 @@ export function discordPayload(events, now = new Date()) {
     const label=e.category==='appointments'?'Appointment':e.title;
     const head=e.occurrenceDate===previousDay?'':`\n**${readableDate(e.occurrenceDate)}**\n`;
     const location=`   📍 ${e.location ? safeDiscord(e.location,160) : 'Location TBD'}\n`;
-    const line=`${head}${category.icon} ${readableTime(e.time)} — ${safeDiscord(label)}${e.recurrence!=='none'?' ↻':''}\n${location}`;
+    const description=e.description?`   📝 ${safeDiscord(e.description,400)}\n`:'';
+    const line=`${head}${category.icon} ${readableTime(e.time)} — ${safeDiscord(label)}${e.recurrence!=='none'?' ↻':''}\n${location}${description}`;
     if (shown>=55 || text.length+line.length>3550) break;
     text+=line;shown++;previousDay=e.occurrenceDate;
   }
@@ -133,7 +134,8 @@ export function discordChangePayload(change, now = new Date()) {
     const label=safeDiscord(name,110);
     const location=e.location ? safeDiscord(e.location,160) : 'Location TBD';
     const repeating=e.recurrence==='weekly'?'\n🔁 Repeats weekly':e.recurrence==='monthly'?'\n🔁 Repeats monthly':'';
-    description=`${cat.icon} **${label}**\n🗓️ ${readableDate(e.date)} · ${readableTime(e.time)} (Eastern)\n📍 ${location}${repeating}\n\n_The shared schedule has been refreshed._`;
+    const publicDescription=e.description?`\n📝 ${safeDiscord(e.description,400)}`:'';
+    description=`${cat.icon} **${label}**\n🗓️ ${readableDate(e.date)} · ${readableTime(e.time)} (Eastern)\n📍 ${location}${publicDescription}${repeating}\n\n_The shared schedule has been refreshed._`;
   }
   return {
     username:'Maxi’s Calendar',

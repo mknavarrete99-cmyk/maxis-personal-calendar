@@ -82,3 +82,35 @@ test('Announcement hides medical appointment name and safely prevents mass menti
   assert.doesNotMatch(others,/@everyone|@here/);
   assert.match(others,/＠everyone/);
 });
+
+test('public event description is saved separately from private notes',()=>{
+  const x=normaliseEvent({...base,description:'Come hang out! 💚',notes:'Do not share'});
+  assert.equal(x.description,'Come hang out! 💚');
+  assert.equal(x.notes,'Do not share');
+  assert.equal(normaliseEvent({...base}).description,'');
+  assert.equal(normaliseEvent({...base,description:'x'.repeat(999)}).description.length,400);
+});
+test('public description appears in schedule and add/edit notifications',()=>{
+  const now=new Date('2026-10-25T12:00:00Z');
+  const x=normaliseEvent({...base,description:'Bring snacks for movie night 💜',location:'Discord VC',notes:'PRIVATE REMINDER',share:true});
+  const schedule=JSON.stringify(discordPayload([x],now));
+  assert.match(schedule,/📝 Bring snacks for movie night 💜/);
+  assert.match(schedule,/📍 Discord VC/);
+  assert.doesNotMatch(schedule,/PRIVATE REMINDER/);
+  for(const action of ['added','updated','removed']){
+    const notification=JSON.stringify(discordChangePayload({action,event:x},now));
+    assert.match(notification,/📝 Bring snacks for movie night 💜/);
+    assert.doesNotMatch(notification,/PRIVATE REMINDER/);
+  }
+});
+test('private descriptions are not shared and special mentions are escaped',()=>{
+  const now=new Date('2026-10-25T12:00:00Z');
+  const draft=normaliseEvent({...base,description:'@everyone Be there at *nine*',share:true});
+  const safe=JSON.stringify(discordPayload([draft],now));
+  assert.doesNotMatch(safe,/@everyone/);
+  assert.match(safe,/＠everyone/);
+  assert.match(safe,/\\\\\*nine\\\\\*/);
+  const privateDraft={...draft,share:false};
+  assert.doesNotMatch(JSON.stringify(discordPayload([privateDraft],now)),/＠everyone/);
+  assert.equal(discordChangePayload({action:'added',event:privateDraft},now),null);
+});

@@ -39,6 +39,7 @@ export function normaliseEvent(v) {
   const recurrence = clean(v.recurrence || 'none', 12);
   const until = clean(v.until,10);
   const duration = Number(v.duration ?? 60);
+  if(String(v.description??'').trim().length>12000)throw new Error('Please keep event descriptions under 12,000 characters until the larger upload support is available.');
   if (!title) throw new Error('Please add an event name.');
   if (!CATEGORIES.includes(category)) throw new Error('Choose an event category.');
   if (!dateValid(date)) throw new Error('Choose a valid event date.');
@@ -97,7 +98,7 @@ export function discordPayload(events, now = new Date()) {
     const label=e.category==='appointments'?'Appointment':e.title;
     const head=e.occurrenceDate===previousDay?'':`\n**${readableDate(e.occurrenceDate)}**\n`;
     const location=`   📍 ${e.location ? safeDiscord(e.location,160) : 'Location TBD'}\n`;
-    const description=e.description?`   📝 ${safeDiscord(e.description,400)}\n`:'';
+    const description=e.description?`   📝 ${safeDiscord(e.description,400)}${e.description.length>400?'… (full text posted separately)':''}\n`:'';
     const line=`${head}${category.icon} ${readableTime(e.time)} — ${safeDiscord(label)}${e.recurrence!=='none'?' ↻':''}\n${location}${description}`;
     if (shown>=55 || text.length+line.length>3550) break;
     text+=line;shown++;previousDay=e.occurrenceDate;
@@ -134,7 +135,7 @@ export function discordChangePayload(change, now = new Date()) {
     const label=safeDiscord(name,110);
     const location=e.location ? safeDiscord(e.location,160) : 'Location TBD';
     const repeating=e.recurrence==='weekly'?'\n🔁 Repeats weekly':e.recurrence==='monthly'?'\n🔁 Repeats monthly':'';
-    const publicDescription=e.description?`\n📝 ${safeDiscord(e.description,400)}`:'';
+    const publicDescription=e.description?`\n📝 ${safeDiscord(e.description,400)}${e.description.length>400?'… (full text posted separately)':''}`:'';
     description=`${cat.icon} **${label}**\n🗓️ ${readableDate(e.date)} · ${readableTime(e.time)} (Eastern)\n📍 ${location}${publicDescription}${repeating}\n\n_The shared schedule has been refreshed._`;
   }
   return {
@@ -164,7 +165,7 @@ export function discordDailyPayload(events,now=new Date()) {
     const title=e.category==='appointments'?'Appointment':e.title;
     const header=e.occurrenceDate===previousDay?'':'\n**'+readableDate(e.occurrenceDate)+'**\n';
     const location=e.location?safeDiscord(e.location,160):'Location TBD';
-    const details=e.description?'\n   📝 '+safeDiscord(e.description,400):'';
+    const details=e.description?'\n   📝 '+safeDiscord(e.description,400)+(e.description.length>400?'… (continued below)':''):'';
     const line=header+category.icon+' '+readableTime(e.time)+' — '+safeDiscord(title)+(e.recurrence!=='none'?' ↻':'')+'\n   📍 '+location+details+'\n';
     if(shown>=40 || description.length+line.length>3400)break;
     description+=line;shown++;previousDay=e.occurrenceDate;
@@ -182,4 +183,42 @@ export function discordDailyPayload(events,now=new Date()) {
       timestamp:now.toISOString()
     }]
   };
+}
+
+
+export function safeLongDiscordText(s){
+ return String(s??'').replace(/\r\n?/g,'\n').replace(/@/g,'＠').replace(/([\\*_~\x60|>])/g,'\\$1');
+}
+export function splitLongDiscordText(s,limit=2800){
+ let rest=String(s),parts=[];
+ while(rest.length>limit){
+  let cut=limit;
+  const last=rest.charCodeAt(cut-1);
+  if(last>=0xD800&&last<=0xDBFF)cut--;
+  parts.push(rest.slice(0,cut));rest=rest.slice(cut);
+ }
+ if(rest)parts.push(rest);
+ return parts;
+}
+export function discordChangePayloads(change,now=new Date()){
+ const main=discordChangePayload(change,now);if(!main)return [];
+ if(!change.event?.description || change.event.description.length<=400)return [main];
+ const parts=splitLongDiscordText(safeLongDiscordText(change.event.description));
+ return [main,...parts.map((part,i)=>({username:'Maxi’s Calendar',allowed_mentions:{parse:[]},
+  embeds:[{title:'💜💚 Full event description · '+(i+1)+'/'+parts.length,
+   description:'📝 '+part,color:0x39B58A,timestamp:now.toISOString()}]}))];
+}
+export function discordDailyPayloads(events,now=new Date()){
+ const pages=[discordDailyPayload(events,now)];
+ for(const e of expandEvents(events,todayEastern(now),addDays(todayEastern(now),6)).filter(e=>e.share)){
+  if(!e.description||e.description.length<=400)continue;
+  const parts=splitLongDiscordText(safeLongDiscordText(e.description));
+  for(let i=0;i<parts.length;i++)pages.push({
+    username:'Maxi’s Calendar',allowed_mentions:{parse:[]},
+    embeds:[{title:'💜💚 '+safeDiscord(e.category==='appointments'?'Appointment':e.title,110)+' · Description '+(i+1)+'/'+parts.length,
+     description:(i===0?'🗓️ '+readableDate(e.occurrenceDate)+' · '+readableTime(e.time)+' (Eastern)\n📍 '+(e.location?safeDiscord(e.location,160):'Location TBD')+'\n':'')+'📝 '+parts[i],
+     color:0x8864D0,timestamp:now.toISOString()}]
+  });
+ }
+ return pages;
 }

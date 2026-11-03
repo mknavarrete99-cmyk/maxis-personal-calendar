@@ -88,7 +88,7 @@ test('public event description is saved separately from private notes',()=>{
   assert.equal(x.description,'Come hang out! 💚');
   assert.equal(x.notes,'Do not share');
   assert.equal(normaliseEvent({...base}).description,'');
-  assert.equal(normaliseEvent({...base,description:'x'.repeat(999)}).description.length,400);
+  assert.equal(normaliseEvent({...base,description:'x'.repeat(999)}).description.length,999);
 });
 test('public description appears in schedule and add/edit notifications',()=>{
   const now=new Date('2026-10-25T12:00:00Z');

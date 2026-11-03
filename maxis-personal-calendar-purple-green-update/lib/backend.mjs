@@ -1,5 +1,5 @@
 import {getStore} from '@netlify/blobs';
-import {discordPayload,discordChangePayload,discordDailyPayload,todayEastern} from './model.mjs';
+import {discordPayload,discordChangePayloads,discordDailyPayloads,todayEastern} from './model.mjs';
 
 const store = () => getStore({name:'maxi-private-calendar-v1',consistency:'strong'});
 const KEY='calendar', MSG_KEY='discord-message', DAILY_KEY='discord-daily-agenda';
@@ -23,10 +23,21 @@ export async function updateCalendar(operation) {
   throw new Error('Calendar was updated elsewhere. Please try again.');
 }
 export async function getSyncState() {return await store().get('discord-sync',{type:'json'}) || {ok:false,updatedAt:null,error:null};}
-async function requestDiscord(url, method, body) {
-  const response=await fetch(url,{method,headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(12000)});
-  if(!response.ok) {const info=(await response.text()).slice(0,180); const error=new Error(`Discord returned ${response.status}: ${info}`);error.status=response.status;throw error;}
-  return await response.json();
+async function requestDiscord(url,method,body){
+ for(let attempt=0;attempt<5;attempt++){
+  const hasBody=body!==undefined;
+  const response=await fetch(url,{method,headers:hasBody?{'Content-Type':'application/json'}:{},
+    body:hasBody?JSON.stringify(body):undefined,signal:AbortSignal.timeout(12000)});
+  if(response.status===429&&attempt<4){
+   const data=await response.json().catch(()=>({retry_after:1}));
+   await new Promise(resolve=>setTimeout(resolve,Math.min(5000,Math.max(500,Math.ceil(Number(data.retry_after||1)*1000)))));
+   continue;
+  }
+  if(!response.ok){const e=new Error('Discord returned '+response.status+': '+(await response.text()).slice(0,180));e.status=response.status;throw e;}
+  if(response.status===204)return null;
+  const text=await response.text();return text?JSON.parse(text):null;
+ }
+ throw new Error('Discord rate limit did not clear.');
 }
 export async function syncDiscord(now=new Date(), change=null) {
   const url=webhook();
@@ -48,12 +59,12 @@ export async function syncDiscord(now=new Date(), change=null) {
       await bucket.setJSON(MSG_KEY,{id:messageId});
     }
     // Updates made from the calendar create a new notification; manual/daily refresh does not.
-    const changePayload=discordChangePayload(change,now);
+    const changePayloads=discordChangePayloads(change,now);
     let notice={sent:false};
-    if(changePayload){
+    if(changePayloads.length){
       try {
-        await requestDiscord(`${url}?wait=true`,'POST',changePayload);
-        notice={sent:true};
+        for(const message of changePayloads)await requestDiscord(url+'?wait=true','POST',message);
+        notice={sent:true,parts:changePayloads.length};
       } catch(err){
         console.error('Calendar change alert failed:',err);
         notice={sent:false,error:`Discord announcement failed: ${String(err.message||err).slice(0,160)}`};
@@ -72,31 +83,31 @@ export async function syncDiscord(now=new Date(), change=null) {
 }
 
 
-export async function postDailyAgenda(now=new Date(),{create=true,events=null}={}) {
-  const url=webhook(), date=todayEastern(now);
-  if(!url)return {ok:false,date,error:'Discord webhook is not configured.'};
-  if(!validWebhook(url))return {ok:false,date,error:'Discord webhook URL is invalid.'};
-  try{
-    const bucket=store();
-    const prior=await bucket.get(DAILY_KEY,{type:'json',consistency:'strong'});
-    let messageId=prior?.date===date?prior?.id:null;
-    if(!create&&!messageId)return {ok:true,skipped:true,date};
-    const source=events??(await getCalendar()).events;
-    const payload=discordDailyPayload(source,now);
-    let posted=false;
-    if(messageId){
-      try{await requestDiscord(url+'/messages/'+messageId,'PATCH',payload);}
-      catch(err){if(err.status!==404&&err.status!==10008)throw err;messageId=null;}
-    }
-    if(!messageId){
-      if(!create)return {ok:true,skipped:true,date};
-      const sent=await requestDiscord(url+'?wait=true','POST',payload);
-      if(!/^\d+$/.test(String(sent.id||'')))throw new Error('Discord did not return the daily post ID.');
-      messageId=sent.id;posted=true;
-    }
-    await bucket.setJSON(DAILY_KEY,{date,id:messageId,updatedAt:now.toISOString()});
-    return {ok:true,date,posted,updated:!posted};
-  }catch(error){
-    return {ok:false,date,error:'Daily agenda could not be posted: '+String(error.message||error).slice(0,200)};
+export async function postDailyAgenda(now=new Date(),{create=true,events=null}={}){
+ const url=webhook(),date=todayEastern(now);
+ if(!url)return {ok:false,date,error:'Discord webhook is not configured.'};
+ if(!validWebhook(url))return {ok:false,date,error:'Discord webhook URL is invalid.'};
+ try{
+  const bucket=store(),prior=await bucket.get(DAILY_KEY,{type:'json',consistency:'strong'});
+  const old=prior?.date===date?[prior.id,...(prior.extraIds||[])].filter(Boolean):[];
+  if(!create&&!old.length)return {ok:true,skipped:true,date};
+  const pages=discordDailyPayloads(events??(await getCalendar()).events,now),ids=[];
+  let posted=false;
+  for(let i=0;i<pages.length;i++){
+   let id=old[i]||null;
+   if(id){try{await requestDiscord(url+'/messages/'+id,'PATCH',pages[i]);}catch(e){if(e.status!==404&&e.status!==10008)throw e;id=null;}}
+   if(!id){
+    const message=await requestDiscord(url+'?wait=true','POST',pages[i]);
+    if(!/^\d+$/.test(String(message?.id||'')))throw new Error('Discord did not return a message ID.');
+    id=message.id;posted=true;
+   }
+   ids.push(id);
   }
+  for(const id of old.slice(pages.length)){
+   try{await requestDiscord(url+'/messages/'+id,'DELETE');}
+   catch(e){if(e.status!==404&&e.status!==10008)console.warn('Cannot remove old daily message:',e);}
+  }
+  await bucket.setJSON(DAILY_KEY,{date,id:ids[0],extraIds:ids.slice(1),updatedAt:now.toISOString()});
+  return {ok:true,date,posted,updated:!posted,pages:pages.length};
+ }catch(e){return {ok:false,date,error:'Daily agenda could not be posted: '+String(e.message||e).slice(0,200)};}
 }

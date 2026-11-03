@@ -1,5 +1,5 @@
 import test from 'node:test';import assert from 'node:assert/strict';
-import {normaliseEvent,expandEvents,addDays,shiftMonth,todayEastern,discordPayload,discordChangePayload,dateValid} from '../lib/model.mjs';
+import {normaliseEvent,expandEvents,addDays,shiftMonth,todayEastern,discordPayload,discordChangePayload,discordDailyPayload,isDailyPostHour,dateValid} from '../lib/model.mjs';
 const base={id:'x',title:'Team meetup',category:'groups',date:'2026-10-26',time:'19:00',duration:60,recurrence:'none',until:'',share:true,notes:'PRIVATE'};
 test('date verification and rollover',()=>{assert.equal(dateValid('2026-02-29'),false);assert.equal(dateValid('2028-02-29'),true);assert.equal(addDays('2026-12-31',1),'2027-01-01');assert.equal(shiftMonth('2026-01-31',1),null);});
 test('weekly repeats across daylight savings keep their eastern wall time',()=>{const e={...base,recurrence:'weekly',date:'2026-10-26',until:'2026-11-16'};assert.deepEqual(expandEvents([e],'2026-10-26','2026-11-16').map(x=>[x.occurrenceDate,x.time]),[['2026-10-26','19:00'],['2026-11-02','19:00'],['2026-11-09','19:00'],['2026-11-16','19:00']]);});
@@ -113,4 +113,38 @@ test('private descriptions are not shared and special mentions are escaped',()=>
   const privateDraft={...draft,share:false};
   assert.doesNotMatch(JSON.stringify(discordPayload([privateDraft],now)),/＠everyone/);
   assert.equal(discordChangePayload({action:'added',event:privateDraft},now),null);
+});
+
+
+test('daily post time stays at 8 AM Eastern across daylight-saving time',()=>{
+  assert.equal(isDailyPostHour(new Date('2026-01-02T13:00:00Z')),true);
+  assert.equal(isDailyPostHour(new Date('2026-01-02T12:00:00Z')),false);
+  assert.equal(isDailyPostHour(new Date('2026-07-02T12:00:00Z')),true);
+  assert.equal(isDailyPostHour(new Date('2026-07-02T13:00:00Z')),false);
+  assert.equal(isDailyPostHour(new Date('2026-11-01T13:00:00Z')),true);
+});
+test('daily digest includes upcoming shared events and location/description, never private fields',()=>{
+  const now=new Date('2026-10-25T12:00:00Z');
+  const entries=[
+    {...base,date:'2026-10-25',time:'',location:'Discord voice',description:'Bring snacks 💜',notes:'SECRET'},
+    {...base,id:'c',date:'2026-10-31',category:'appointments',title:'Patient Jane',description:'Arrive early'},
+    {...base,id:'d',date:'2026-11-01',title:'Not in seven days'},
+    {...base,id:'e',date:'2026-10-27',title:'Hidden event',share:false}
+  ];
+  const payload=discordDailyPayload(entries,now);
+  const output=JSON.stringify(payload);
+  assert.match(output,/Time TBD/);
+  assert.match(output,/Discord voice/);
+  assert.match(output,/Bring snacks 💜/);
+  assert.match(output,/Arrive early/);
+  assert.match(output,/Appointment/);
+  assert.doesNotMatch(output,/Patient Jane|SECRET|Not in seven days|Hidden event/);
+  assert.deepEqual(payload.allowed_mentions,{parse:[]});
+});
+test('daily digest displays empty upcoming weeks and repeating events',()=>{
+  const now=new Date('2026-11-03T13:00:00Z');
+  assert.match(discordDailyPayload([],now).embeds[0].description,/No events shared/);
+  const repeating={...base,date:'2026-10-20',recurrence:'weekly',time:'',description:'Weekly note'};
+  const payload=discordDailyPayload([repeating],now);
+  assert.match(payload.embeds[0].description,/Weekly note|Time TBD/);
 });

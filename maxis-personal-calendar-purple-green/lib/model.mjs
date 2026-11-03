@@ -148,3 +148,38 @@ export function discordChangePayload(change, now = new Date()) {
     }]
   };
 }
+
+
+export function isDailyPostHour(now=new Date()) {
+  const hour=new Intl.DateTimeFormat('en-US',{timeZone:TIME_ZONE,hour:'2-digit',hourCycle:'h23'}).formatToParts(now).find(p=>p.type==='hour')?.value;
+  return Number(hour)===8;
+}
+// The daily post shows the coming seven calendar dates and only shared details.
+export function discordDailyPayload(events,now=new Date()) {
+  const start=todayEastern(now),through=addDays(start,6);
+  const visible=expandEvents(events,start,through).filter(e=>e.share);
+  let description='',shown=0,previousDay='';
+  for(const e of visible){
+    const category=CATEGORY_INFO[e.category]||CATEGORY_INFO.personal;
+    const title=e.category==='appointments'?'Appointment':e.title;
+    const header=e.occurrenceDate===previousDay?'':'\n**'+readableDate(e.occurrenceDate)+'**\n';
+    const location=e.location?safeDiscord(e.location,160):'Location TBD';
+    const details=e.description?'\n   📝 '+safeDiscord(e.description,400):'';
+    const line=header+category.icon+' '+readableTime(e.time)+' — '+safeDiscord(title)+(e.recurrence!=='none'?' ↻':'')+'\n   📍 '+location+details+'\n';
+    if(shown>=40 || description.length+line.length>3400)break;
+    description+=line;shown++;previousDay=e.occurrenceDate;
+  }
+  if(!description)description='No events shared for the next seven days. 💚';
+  if(shown<visible.length)description+='\n_+'+(visible.length-shown)+' more upcoming events. Check the main schedule for the rest._';
+  return {
+    username:'Maxi’s Calendar',
+    allowed_mentions:{parse:[]},
+    embeds:[{
+      title:'💜💚 Good morning! Your upcoming events',
+      description,
+      color:0x8864D0,
+      footer:{text:'Eastern Time (EST/EDT) · Next 7 days · '+shown+' events shown'},
+      timestamp:now.toISOString()
+    }]
+  };
+}

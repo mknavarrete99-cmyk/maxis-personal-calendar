@@ -100,6 +100,15 @@ async function deleteEvent(){const id=$('#event-id').value;if(!id||!confirm('Rem
     ?`Event removed. Schedule updated, but ${res.sync.notice.error}`:res.sync.notice?.sent
     ?'Event removed! Discord schedule updated and a new announcement posted. 💜💚':'Event removed. Discord schedule updated.',failed)}catch(err){$('#event-error').textContent=err.message}finally{btn.disabled=false}}
 async function syncNow(){const btn=$('#sync-btn');btn.disabled=true;try{const res=await api('sync',{method:'POST',body:{}});state.sync=res.sync;render();flash(res.sync.ok?'Discord schedule is up to date!':res.sync.error,!res.sync.ok)}catch(e){flash(e.message,true)}finally{btn.disabled=false}}
+async function postDailyNow(){
+  const button=$('#daily-btn');button.disabled=true;
+  try{
+    const result=await api('daily',{method:'POST',body:{}});
+    if(result.daily?.ok)flash(result.daily.posted?'Daily upcoming events posted in Discord! 💜💚':'Today’s upcoming events refreshed in Discord! 💜💚');
+    else flash(result.daily?.error||'Could not send the daily agenda.',true);
+  }catch(error){flash(error.message,true)}
+  finally{button.disabled=false}
+}
 function setView(view){state.view=view;render();$('#sidebar').classList.remove('show')}
 function navigate(direction){if(state.view==='month')state.focus=shiftMonth(state.focus,direction);else if(state.view==='week')state.focus=addDays(state.focus,direction*7);else state.focus=addDays(state.focus,direction*30);render()}
 function attach(){
@@ -114,7 +123,7 @@ function attach(){
   $$('[data-agenda]').forEach(b=>b.addEventListener('click',()=>setView('agenda')));
   $('#event-form').addEventListener('submit',saveEvent);$('#close-modal').addEventListener('click',closeEvent);$('#cancel-event').addEventListener('click',closeEvent);$('#delete-event').addEventListener('click',deleteEvent);
   $('#event-recurrence').addEventListener('change',()=>{$('#until-holder').hidden=$('#event-recurrence').value==='none'});
-  $('#event-category').addEventListener('change',updateSharingDescription);$('#sync-btn').addEventListener('click',syncNow);
+  $('#event-category').addEventListener('change',updateSharingDescription);$('#sync-btn').addEventListener('click',syncNow);$('#daily-btn').addEventListener('click',postDailyNow);
 }
 async function start(){attach();try{const res=await api('session');if(res.authenticated){await reload();showApp()}else showLogin()}catch(e){showLogin(e.message)}}
 start();

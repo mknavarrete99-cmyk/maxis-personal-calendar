@@ -1,5 +1,5 @@
 import {createHmac,createHash,randomUUID,timingSafeEqual} from 'node:crypto';
-import {getCalendar,updateCalendar,getSyncState,syncDiscord} from '../../lib/backend.mjs';
+import {getCalendar,updateCalendar,getSyncState,syncDiscord,postDailyAgenda} from '../../lib/backend.mjs';
 import {normaliseEvent} from '../../lib/model.mjs';
 
 const noStore={ 'Content-Type':'application/json; charset=utf-8', 'Cache-Control':'no-store', 'X-Content-Type-Options':'nosniff'};
@@ -85,6 +85,7 @@ export default async (req) => {
       return respond({ok:true,events:result.events,sync});
     }
     if(action==='sync'&&req.method==='POST') {await readBody(req);return respond({sync:await syncDiscord()});}
+    if(action==='daily'&&req.method==='POST') {await readBody(req);return respond({daily:await postDailyAgenda()});}
     return respond({error:'Unknown action.'},404);
   }catch(error) {
     console.error('Calendar API:',error);

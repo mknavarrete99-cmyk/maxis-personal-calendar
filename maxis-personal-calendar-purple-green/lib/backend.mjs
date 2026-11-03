@@ -1,8 +1,8 @@
 import {getStore} from '@netlify/blobs';
-import {discordPayload,discordChangePayload} from './model.mjs';
+import {discordPayload,discordChangePayload,discordDailyPayload,todayEastern} from './model.mjs';
 
 const store = () => getStore({name:'maxi-private-calendar-v1',consistency:'strong'});
-const KEY='calendar', MSG_KEY='discord-message';
+const KEY='calendar', MSG_KEY='discord-message', DAILY_KEY='discord-daily-agenda';
 const webhook=()=> process.env.DISCORD_WEBHOOK_URL?.trim() || '';
 export function validWebhook(url) {
   try {const u = new URL(url); return u.protocol==='https:' && ['discord.com','discordapp.com'].includes(u.hostname) && /^\/api\/webhooks\/\d{12,25}\/[\w-]{20,}$/.test(u.pathname) && !u.search && !u.hash;} catch {return false;}
@@ -59,6 +59,8 @@ export async function syncDiscord(now=new Date(), change=null) {
         notice={sent:false,error:`Discord announcement failed: ${String(err.message||err).slice(0,160)}`};
       }
     }
+    const daily=await postDailyAgenda(now,{create:false,events:calendar.events});
+    if(!daily.ok)console.warn('Today’s daily agenda could not be refreshed:',daily.error);
     const state={ok:true,configured:true,error:null,updatedAt:now.toISOString(),revision:calendar.revision,notice};
     await bucket.setJSON('discord-sync',state);
     return state;
@@ -66,5 +68,35 @@ export async function syncDiscord(now=new Date(), change=null) {
     const state={ok:false,configured:true,error:`Discord could not be updated: ${String(error.message||error).slice(0,230)}`,updatedAt:null};
     await store().setJSON('discord-sync',state);
     return state;
+  }
+}
+
+
+export async function postDailyAgenda(now=new Date(),{create=true,events=null}={}) {
+  const url=webhook(), date=todayEastern(now);
+  if(!url)return {ok:false,date,error:'Discord webhook is not configured.'};
+  if(!validWebhook(url))return {ok:false,date,error:'Discord webhook URL is invalid.'};
+  try{
+    const bucket=store();
+    const prior=await bucket.get(DAILY_KEY,{type:'json',consistency:'strong'});
+    let messageId=prior?.date===date?prior?.id:null;
+    if(!create&&!messageId)return {ok:true,skipped:true,date};
+    const source=events??(await getCalendar()).events;
+    const payload=discordDailyPayload(source,now);
+    let posted=false;
+    if(messageId){
+      try{await requestDiscord(url+'/messages/'+messageId,'PATCH',payload);}
+      catch(err){if(err.status!==404&&err.status!==10008)throw err;messageId=null;}
+    }
+    if(!messageId){
+      if(!create)return {ok:true,skipped:true,date};
+      const sent=await requestDiscord(url+'?wait=true','POST',payload);
+      if(!/^\d+$/.test(String(sent.id||'')))throw new Error('Discord did not return the daily post ID.');
+      messageId=sent.id;posted=true;
+    }
+    await bucket.setJSON(DAILY_KEY,{date,id:messageId,updatedAt:now.toISOString()});
+    return {ok:true,date,posted,updated:!posted};
+  }catch(error){
+    return {ok:false,date,error:'Daily agenda could not be posted: '+String(error.message||error).slice(0,200)};
   }
 }

@@ -11,7 +11,7 @@ It is a **separate project** from the old Discord slash-command bot. You do **no
 - Optional **weekly / monthly repeats** (editing or deleting an event edits its entire series; there are no one-off exceptions yet).
 - Toggle **Show on Discord** for each event.
 - Every save/delete updates **the same webhook message** in your Discord channel rather than posting duplicates. You may pin that message in Discord once it appears. It shows shared events in the **next 45 days**, up to Discord's message length limit.
-- **Automatic daily refresh** of that message so the date range keeps rolling even when nothing gets edited. It runs around **7:20 AM EST / 8:20 AM EDT**; it is a refresh, not a notification ping.
+- **Daily Discord message at 8:00 AM Eastern** shows the upcoming seven days with locations and descriptions. The main 45-day schedule also refreshes daily. It runs around **7:20 AM EST / 8:20 AM EDT**; it is a refresh, not a notification ping.
 - Events with **Show on Discord** enabled display their **date, time (or Time TBD), and location** if provided. Appointments are deliberately generalized to **“Appointment”** (the event title is hidden), and private notes are never sent. Do not put patient-identifying details in location text.
 - Calendar data is stored in site-scoped **Netlify Blobs**, not a Supabase database.
 
@@ -68,7 +68,8 @@ Open your new `https://your-project.netlify.app` address. Enter your `ADMIN_PASS
 - Press **Add event**, name it, choose one of the five calendars, add a date and optionally a time **in Eastern Time**, then save. Leave the time empty if undecided: the calendar and Discord will show **Time TBD**, and you can click the event to edit it later.
 - Leave **Show on Discord** checked if Livy should see the entry. For an Appointments event, Discord only receives the generic title **Appointment**, plus its date, time (or Time TBD), and location if entered.
 - The first save creates the webhook message; later edits update that same message. Alternatively, press **Refresh Discord** to create an initial “no appointments” message.
-- **Pin the message** in the channel yourself if you want to keep it easy to find. Discord webhooks don't pin messages on their own.
+- **Pin the main schedule message** in the channel yourself if you want to keep it easy to find. Discord webhooks don't pin messages on their own.
+- Click **☀ Post today's upcoming events** in the calendar sidebar to send or refresh today's daily summary immediately. The same day's post gets edited when appointments change.
 - Want an event just for you? Uncheck **Show on Discord**. It stays in the private planner but isn't sent to the channel.
 
 If Discord fails during a save, the calendar **still saves** the appointment and shows a warning. Check your `DISCORD_WEBHOOK_URL` and press **Refresh Discord** to retry.

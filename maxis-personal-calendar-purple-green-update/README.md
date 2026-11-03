@@ -11,7 +11,7 @@ It is a **separate project** from the old Discord slash-command bot. You do **no
 - Optional **weekly / monthly repeats** (editing or deleting an event edits its entire series; there are no one-off exceptions yet).
 - Toggle **Show on Discord** for each event.
 - Every save/delete updates **the same webhook message** in your Discord channel rather than posting duplicates. You may pin that message in Discord once it appears. It shows shared events in the **next 45 days**, up to Discord's message length limit.
-- **Daily Discord message at 8:00 AM Eastern** shows the upcoming seven days with locations and descriptions. The main 45-day schedule also refreshes daily. It runs around **7:20 AM EST / 8:20 AM EDT**; it is a refresh, not a notification ping.
+- **Daily Discord message at 8:00 AM Eastern** shows the upcoming seven days with locations and descriptions. The main 45-day schedule also refreshes daily. Scheduled functions run at 12:00 and 13:00 UTC, but a New York timezone check makes the daily post happen at **8:00 AM Eastern** in either season.
 - Events with **Show on Discord** enabled display their **date, time (or Time TBD), and location** if provided. Appointments are deliberately generalized to **“Appointment”** (the event title is hidden), and private notes are never sent. Do not put patient-identifying details in location text.
 - Calendar data is stored in site-scoped **Netlify Blobs**, not a Supabase database.
 
@@ -97,9 +97,9 @@ The starter calendar is **empty**, with no fabricated events.
 - Appointments are **not yet imported or synchronized** from another calendar. No external calendar provider is connected.
 - The Discord message displays the **upcoming 45 days**, not a full multi-year history, and long schedules may be truncated by Discord's embed limits.
 - Only shared events are sent to Discord. **Locations are shown** for shared events if entered; private notes are never sent. Appointments entries are generalized by design.
-- The webhook message is *edited*, so editing the calendar does **not** send a new Discord notification or ping every time. It keeps the channel clean.
+- The main 45-day schedule is edited in place, and changing a shared event posts a separate event-change notification. Each morning creates one fresh seven-day agenda message, updated in place during the rest of that day. Discord does not automatically notify Livy when an existing message is edited.
 - The calendar's dates and optional clock times are entered as **Eastern wall time**. Weekly repeats keep their local time across daylight-saving transitions.
-- Netlify scheduled refresh uses UTC and thus changes its local time between EST and EDT; this is harmless because it's not a user-facing appointment.
+- Netlify scheduled functions use UTC, so the refresh function runs at 12:00 and 13:00 UTC but acts only when local New York time is 8:00 AM, supporting both EST and EDT.
 - If your webhook is deleted or the Discord message is removed, clicking **Refresh Discord** creates a new message.
 - Be careful with GitHub pull-request **Deploy Previews** and Netlify Blobs (site-scoped Blobs are shared between deploys). The application blocks access via its API on branch deploys and deploy previews to protect production events. Use your published production address for the real calendar.
 - You can change `ADMIN_PASSWORD` or `SESSION_SECRET` in Netlify to revoke existing sessions (changing the password alone does not revoke an already-issued session until the cookie expires; rotate **both** to revoke sessions immediately).

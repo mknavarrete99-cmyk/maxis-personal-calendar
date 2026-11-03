@@ -49,7 +49,7 @@ export function normaliseEvent(v) {
   return {
     title, category, date, time, duration, recurrence,
     until: recurrence==='none'?'':until,
-    location:clean(v.location,160), description:clean(v.description,400), notes:clean(v.notes,1200),
+    location:clean(v.location,160), description:clean(v.description,12000), notes:clean(v.notes,1200),
     share: v.share === true
   };
 }

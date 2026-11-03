@@ -128,3 +128,7 @@ For local Netlify development, use the Netlify CLI (`npx netlify dev`), with loc
 **If Discord doesn't update:** verify that the webhook URL is from a Discord channel you can access, that it's correctly set in Netlify, and then press **Refresh Discord**. A missing webhook leaves calendar editing functional.
 
 **If you see a time conversion concern:** All calendar inputs are Eastern wall-clock times; the app never assumes your computer's timezone when storing an event.
+
+## Longer public descriptions
+
+The description box now supports up to **12,000 characters**, rather than 400. Longer descriptions are sent in additional Discord notification messages and extra pages of the daily seven-day agenda so Livy can read the complete description. The pinned 45-day overview shows a shorter preview to avoid filling the whole channel. Truly unlimited text is not possible because Discord and Netlify have request and message limits. Keep patient-identifying information out of shared descriptions.

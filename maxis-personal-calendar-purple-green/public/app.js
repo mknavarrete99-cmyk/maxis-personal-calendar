@@ -31,7 +31,7 @@ function occurrenceList(from,to){const result=[];for(const event of state.events
   for(const date of dates){if(date<=to&&date>=from&&(!event.until||date<=event.until))result.push({...event,occurrenceDate:date});}
 }return result.sort((a,b)=>(a.occurrenceDate+(a.time||'99:99')+a.title).localeCompare(b.occurrenceDate+(b.time||'99:99')+b.title));}
 function visibleEvents(from,to){return occurrenceList(from,to).filter(e=>state.filters.has(e.category));}
-async function api(action,{method='GET',body}={}){const res=await fetch(`${API}?action=${encodeURIComponent(action)}`,{method,credentials:'same-origin',headers:body?{'Content-Type':'application/json'}:{},body:body?JSON.stringify(body):undefined,cache:'no-store'});const data=await res.json().catch(()=>({}));if(!res.ok){if(res.status===401 && action!=='login'){showLogin();}throw new Error(data.error||`Error ${res.status}`)}return data;}
+async function api(action,{method='GET',body}={}){const res=await fetch(`${API}?action=${encodeURIComponent(action)}`,{method,credentials:'same-origin',headers:body?{'Content-Type':'application/json'}:{},body:body?JSON.stringify(body):undefined,cache:'no-store'});const data=await res.json().catch(()=>({}));if(!res.ok){const err=new Error(data.error||`Error ${res.status}`);err.status=res.status;if(res.status===401&&!['login','save','delete'].includes(action))showLogin('Your session expired. Please sign in again.');throw err;}return data;}
 function showLogin(message=''){ $('#app').hidden=true;$('#login').hidden=false;$('#login-error').textContent=message;$('#password').focus();}
 function showApp(){$('#login').hidden=true;$('#app').hidden=false;render();}
 function flash(message,error=false){const el=$('#feedback');el.textContent=message;el.classList.toggle('error',error);el.hidden=false;clearTimeout(flash.timer);flash.timer=setTimeout(()=>el.hidden=true,6500);}
@@ -82,8 +82,36 @@ function renderUpNext(){const items=visibleEvents(todayEastern(),addDays(todayEa
   for(const e of items){const b=document.createElement('button');b.className='upcoming-item';b.type='button';const ic=document.createElement('span');ic.className='upcoming-icon';ic.textContent=cats[e.category].icon;const content=document.createElement('span');const title=document.createElement('div');title.className='upcoming-title';title.textContent=e.title;const meta=document.createElement('div');meta.className='upcoming-meta';meta.textContent=`${readableDate(e.occurrenceDate,{month:'short',day:'numeric'})} · ${readableTime(e.time)}${e.time?' ET':''}${e.location?' · 📍 '+e.location:''}`;content.append(title,meta);b.append(ic,content);b.addEventListener('click',()=>openEvent(e));target.append(b)}
 }
 function updateSharingDescription(){const isAppointment=$('#event-category').value==='appointments';$('#share-description').textContent=isAppointment?'Discord shows “Appointment”, date, time (or Time TBD), location, and optional public description. Your private title and notes stay hidden.':'Discord shows the event name, date, time (or Time TBD), location, and optional public description. Notes stay private.';}
-function openEvent(event=null,date=null){const form=$('#event-form');form.reset();$('#event-error').textContent='';$('#event-id').value=event?.id||'';$('#event-title').value=event?.title||'';$('#event-category').value=event?.category||'appointments';$('#event-date').value=event?.date||date||todayEastern();$('#event-time').value=event?.time||'';$('#event-duration').value=String(event?.duration||60);$('#event-recurrence').value=event?.recurrence||'none';$('#event-until').value=event?.until||'';$('#event-location').value=event?.location||'';$('#event-description').value=event?.description||'';$('#event-notes').value=event?.notes||'';$('#event-share').checked=event?.share??true;$('#until-holder').hidden=$('#event-recurrence').value==='none';$('#modal-title').textContent=event?'Edit your event':'Add a new event';$('#delete-event').hidden=!event;updateSharingDescription();$('#event-dialog').showModal();$('#event-title').focus();}
-function closeEvent(){$('#event-dialog').close()}
+function hideReauth(){
+  state.pendingAction=null;
+  $('#reauth-panel').hidden=true;
+  $('#reauth-password').value='';
+}
+function showReauth(action){
+  state.pendingAction=action;
+  $('#reauth-panel').hidden=false;
+  $('#event-error').textContent='Your login expired. Re-enter your calendar password below. Your unsaved event details are still here.';
+  $('#reauth-retry').textContent=action==='delete'?'Sign in and delete':'Sign in and save event';
+  $('#reauth-password').focus();
+}
+async function reauthAndRetry(){
+  const password=$('#reauth-password').value;
+  if(!password){$('#event-error').textContent='Enter your calendar password to continue.';return;}
+  const btn=$('#reauth-retry');
+  btn.disabled=true;
+  try{
+    await api('login',{method:'POST',body:{password}});
+    const action=state.pendingAction;
+    hideReauth();
+    await reload();
+    if(action==='delete')await deleteEvent();
+    else if(action==='save')await saveEvent({preventDefault(){}});
+  }catch(error){
+    $('#event-error').textContent=error.message;
+  }finally{btn.disabled=false;}
+}
+function openEvent(event=null,date=null){hideReauth();const form=$('#event-form');form.reset();$('#event-error').textContent='';$('#event-id').value=event?.id||'';$('#event-title').value=event?.title||'';$('#event-category').value=event?.category||'appointments';$('#event-date').value=event?.date||date||todayEastern();$('#event-time').value=event?.time||'';$('#event-duration').value=String(event?.duration||60);$('#event-recurrence').value=event?.recurrence||'none';$('#event-until').value=event?.until||'';$('#event-location').value=event?.location||'';$('#event-description').value=event?.description||'';$('#event-notes').value=event?.notes||'';$('#event-share').checked=event?.share??true;$('#until-holder').hidden=$('#event-recurrence').value==='none';$('#modal-title').textContent=event?'Edit your event':'Add a new event';$('#delete-event').hidden=!event;updateSharingDescription();$('#event-dialog').showModal();$('#event-title').focus();}
+function closeEvent(){hideReauth();$('#event-dialog').close()}
 async function saveEvent(ev){ev.preventDefault();const btn=$('#save-event');btn.disabled=true;$('#event-error').textContent='';try{
   const form=new FormData($('#event-form'));
   const body={id:form.get('id')||undefined,title:form.get('title'),category:form.get('category'),date:form.get('date'),time:form.get('time'),duration:Number(form.get('duration')),recurrence:form.get('recurrence'),until:form.get('until'),location:form.get('location'),description:form.get('description'),notes:form.get('notes'),share:$('#event-share').checked};
@@ -93,12 +121,12 @@ async function saveEvent(ev){ev.preventDefault();const btn=$('#save-event');btn.
     ?`Event saved. Schedule updated, but ${res.sync.notice.error}`:res.sync.notice?.sent
     ?'Event saved! Discord schedule updated and a new announcement posted. 💜💚':'Event saved and Discord schedule updated! ✨';
   flash(message,failure);
-}catch(error){$('#event-error').textContent=error.message}finally{btn.disabled=false}}
+}catch(error){if(error.status===401)showReauth('save');else $('#event-error').textContent=error.message}finally{btn.disabled=false}}
 async function deleteEvent(){const id=$('#event-id').value;if(!id||!confirm('Remove this event (including all its repeated dates)?'))return;const btn=$('#delete-event');btn.disabled=true;try{const res=await api('delete',{method:'POST',body:{id}});state.events=res.events;state.sync=res.sync;closeEvent();render();
   const failed=!res.sync?.ok||Boolean(res.sync?.notice?.error);
   flash(!res.sync?.ok?'Event removed. Discord needs a refresh.':res.sync.notice?.error
     ?`Event removed. Schedule updated, but ${res.sync.notice.error}`:res.sync.notice?.sent
-    ?'Event removed! Discord schedule updated and a new announcement posted. 💜💚':'Event removed. Discord schedule updated.',failed)}catch(err){$('#event-error').textContent=err.message}finally{btn.disabled=false}}
+    ?'Event removed! Discord schedule updated and a new announcement posted. 💜💚':'Event removed. Discord schedule updated.',failed)}catch(err){if(err.status===401)showReauth('delete');else $('#event-error').textContent=err.message}finally{btn.disabled=false}}
 async function syncNow(){const btn=$('#sync-btn');btn.disabled=true;try{const res=await api('sync',{method:'POST',body:{}});state.sync=res.sync;render();flash(res.sync.ok?'Discord schedule is up to date!':res.sync.error,!res.sync.ok)}catch(e){flash(e.message,true)}finally{btn.disabled=false}}
 async function postDailyNow(){
   const button=$('#daily-btn');button.disabled=true;
@@ -121,6 +149,8 @@ function attach(){
   $('#prev-btn').addEventListener('click',()=>navigate(-1));$('#next-btn').addEventListener('click',()=>navigate(1));
   $('#menu-btn').addEventListener('click',()=>$('#sidebar').classList.toggle('show'));
   $$('[data-agenda]').forEach(b=>b.addEventListener('click',()=>setView('agenda')));
+  $('#reauth-retry').addEventListener('click',reauthAndRetry);
+  $('#reauth-password').addEventListener('keydown',ev=>{if(ev.key==='Enter'){ev.preventDefault();reauthAndRetry();}});
   $('#event-form').addEventListener('submit',saveEvent);$('#close-modal').addEventListener('click',closeEvent);$('#cancel-event').addEventListener('click',closeEvent);$('#delete-event').addEventListener('click',deleteEvent);
   $('#event-recurrence').addEventListener('change',()=>{$('#until-holder').hidden=$('#event-recurrence').value==='none'});
   $('#event-category').addEventListener('change',updateSharingDescription);$('#sync-btn').addEventListener('click',syncNow);$('#daily-btn').addEventListener('click',postDailyNow);

@@ -31,7 +31,7 @@ function isValidOrigin(req) {
 }
 async function readBody(req){
   if(!req.headers.get('content-type')?.startsWith('application/json'))throw new Error('Please send JSON.');
-  const text=await req.text();if(text.length>16000)throw new Error('Request is too long.');
+  const text=await req.text();if(text.length>40000)throw new Error('Request is too long.');
   return JSON.parse(text || '{}');
 }
 export default async (req) => {

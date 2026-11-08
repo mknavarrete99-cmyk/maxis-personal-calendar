@@ -51,7 +51,8 @@ export function normaliseEvent(v) {
     title, category, date, time, duration, recurrence,
     until: recurrence==='none'?'':until,
     location:clean(v.location,160), description:clean(v.description,12000), notes:clean(v.notes,1200),
-    share: v.share === true
+    share: v.share === true,
+    notifyAtStart: v.notifyAtStart !== false
   };
 }
 export function expandEvents(events, from, through) {
@@ -221,4 +222,33 @@ export function discordDailyPayloads(events,now=new Date()){
   });
  }
  return pages;
+}
+
+
+// Determine the event's Eastern calendar date and clock minute, including DST.
+export function easternMinute(now=new Date()){
+ const p=Object.fromEntries(new Intl.DateTimeFormat('en-US',{timeZone:TIME_ZONE,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(now).map(x=>[x.type,x.value]));
+ return {date:p.year+'-'+p.month+'-'+p.day,time:p.hour+':'+p.minute};
+}
+export function dueEventStarts(events,now=new Date(),lookback=9){
+ const current=Math.floor(now.getTime()/60000)*60000,minutes=new Set();let first=null,last=null;
+ for(let i=0;i<=lookback;i++){
+  const p=easternMinute(new Date(current-i*60000));
+  minutes.add(p.date+'T'+p.time);
+  if(!first||p.date<first)first=p.date;
+  if(!last||p.date>last)last=p.date;
+ }
+ return expandEvents(events,first,last).filter(e=>e.share===true&&e.notifyAtStart!==false&&e.id&&e.time&&minutes.has(e.occurrenceDate+'T'+e.time));
+}
+export function discordStartPayload(e,now=new Date()){
+ const category=CATEGORY_INFO[e.category]||CATEGORY_INFO.personal;
+ const title=safeDiscord(e.category==='appointments'?'Appointment':e.title,110);
+ const loc=e.location?safeDiscord(e.location,160):'Location TBD';
+ const desc=safeLongDiscordText(e.description||'');
+ const detail=desc?'\n\n📝 '+desc.slice(0,1100)+(desc.length>1100?'…':''):'';
+ return {username:'Maxi’s Calendar',allowed_mentions:{parse:[]},embeds:[{
+  title:'⏰ It’s time! Your event is starting',
+  description:category.icon+' **'+title+'**\n🗓️ '+readableDate(e.occurrenceDate)+' · '+readableTime(e.time)+' (Eastern)\n📍 '+loc+detail,
+  color:0x39B58A,timestamp:now.toISOString()
+ }]};
 }

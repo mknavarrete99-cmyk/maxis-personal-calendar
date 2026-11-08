@@ -1,5 +1,5 @@
 import test from 'node:test';import assert from 'node:assert/strict';
-import {normaliseEvent,expandEvents,addDays,shiftMonth,todayEastern,discordPayload,discordChangePayload,discordDailyPayload,isDailyPostHour,dateValid} from '../lib/model.mjs';
+import {normaliseEvent,expandEvents,addDays,shiftMonth,todayEastern,discordPayload,discordChangePayload,discordDailyPayload,isDailyPostHour,dateValid,dueEventStarts,discordStartPayload} from '../lib/model.mjs';
 const base={id:'x',title:'Team meetup',category:'groups',date:'2026-10-26',time:'19:00',duration:60,recurrence:'none',until:'',share:true,notes:'PRIVATE'};
 test('date verification and rollover',()=>{assert.equal(dateValid('2026-02-29'),false);assert.equal(dateValid('2028-02-29'),true);assert.equal(addDays('2026-12-31',1),'2027-01-01');assert.equal(shiftMonth('2026-01-31',1),null);});
 test('weekly repeats across daylight savings keep their eastern wall time',()=>{const e={...base,recurrence:'weekly',date:'2026-10-26',until:'2026-11-16'};assert.deepEqual(expandEvents([e],'2026-10-26','2026-11-16').map(x=>[x.occurrenceDate,x.time]),[['2026-10-26','19:00'],['2026-11-02','19:00'],['2026-11-09','19:00'],['2026-11-16','19:00']]);});
@@ -147,4 +147,38 @@ test('daily digest displays empty upcoming weeks and repeating events',()=>{
   const repeating={...base,date:'2026-10-20',recurrence:'weekly',time:'',description:'Weekly note'};
   const payload=discordDailyPayload([repeating],now);
   assert.match(payload.embeds[0].description,/Weekly note|Time TBD/);
+});
+
+
+test('start reminders allow per-event opt-out and need a shared, timed event',()=>{
+ const e={...base,id:'event-a',date:'2026-11-09',time:'13:00',share:true};
+ assert.equal(normaliseEvent(e).notifyAtStart,true);
+ assert.equal(normaliseEvent({...e,notifyAtStart:false}).notifyAtStart,false);
+ const now=new Date('2026-11-09T18:00:10Z');
+ assert.equal(dueEventStarts([e],now).length,1);
+ assert.equal(dueEventStarts([{...e,share:false}],now).length,0);
+ assert.equal(dueEventStarts([{...e,notifyAtStart:false}],now).length,0);
+ assert.equal(dueEventStarts([{...e,time:''}],now).length,0);
+});
+test('scheduled reminders respect EDT, EST and recurring event dates',()=>{
+ const summer={...base,id:'summer',date:'2026-07-12',time:'15:30',share:true};
+ const winter={...base,id:'winter',date:'2026-01-12',time:'15:30',share:true};
+ assert.equal(dueEventStarts([summer],new Date('2026-07-12T19:30:00Z')).length,1);
+ assert.equal(dueEventStarts([winter],new Date('2026-01-12T20:30:00Z')).length,1);
+ const weekly={...base,id:'weekly',date:'2026-11-02',time:'10:15',recurrence:'weekly',share:true};
+ assert.equal(dueEventStarts([weekly],new Date('2026-11-09T15:15:00Z'))[0].occurrenceDate,'2026-11-09');
+});
+test('start notifications show shared event details without private patient details',()=>{
+ const e={...base,id:'abc',occurrenceDate:'2026-11-09',category:'appointments',title:'Jane Patient',location:'Discord chat',notes:'PRIVATE',description:'@everyone meeting'};
+ const out=JSON.stringify(discordStartPayload(e,new Date('2026-11-09T18:00:00Z')));
+ assert.match(out,/It’s time|Discord chat|Appointment/);
+ assert.match(out,/＠everyone/);
+ assert.doesNotMatch(out,/Jane Patient|PRIVATE|@everyone/);
+});
+test('repeated DST clock hour refers to same event occurrence',()=>{
+ const e={...base,id:'abc',date:'2026-11-01',time:'01:30',share:true};
+ const a=dueEventStarts([e],new Date('2026-11-01T05:30:00Z'));
+ const b=dueEventStarts([e],new Date('2026-11-01T06:30:00Z'));
+ assert.equal(a.length,1);assert.equal(b.length,1);
+ assert.equal(a[0].occurrenceDate,b[0].occurrenceDate);
 });

@@ -132,3 +132,8 @@ For local Netlify development, use the Netlify CLI (`npx netlify dev`), with loc
 ## Longer public descriptions
 
 The description box now supports up to **12,000 characters**, rather than 400. Longer descriptions are sent in additional Discord notification messages and extra pages of the daily seven-day agenda so Livy can read the complete description. The pinned 45-day overview shows a shorter preview to avoid filling the whole channel. Truly unlimited text is not possible because Discord and Netlify have request and message limits. Keep patient-identifying information out of shared descriptions.
+
+
+## Reminder when an event starts
+
+A Netlify scheduled function checks every minute for events whose confirmed Eastern Time start time has arrived. It posts a fresh Discord webhook message showing the shared title, date, time, location and a short public description. **Show on Discord** and **Notify Discord when event starts** must both be checked. Existing shared events default to alerts enabled. Unconfirmed times are skipped. Weekly and monthly repeats are handled, and a persisted per-occurrence marker prevents duplicate alerts. A ten-minute lookback handles minor scheduler delays. Your Discord app's channel notification settings control push alerts; a webhook does not automatically ping members. One-minute polling adds Netlify Functions usage and is subject to plan limits.

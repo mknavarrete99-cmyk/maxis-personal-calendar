@@ -1,5 +1,5 @@
 import {getStore} from '@netlify/blobs';
-import {discordPayload,discordChangePayloads,discordDailyPayloads,todayEastern} from './model.mjs';
+import {discordPayload,discordChangePayloads,discordDailyPayloads,todayEastern,dueEventStarts,discordStartPayload} from './model.mjs';
 
 const store = () => getStore({name:'maxi-private-calendar-v1',consistency:'strong'});
 const KEY='calendar', MSG_KEY='discord-message', DAILY_KEY='discord-daily-agenda';
@@ -110,4 +110,29 @@ export async function postDailyAgenda(now=new Date(),{create=true,events=null}={
   await bucket.setJSON(DAILY_KEY,{date,id:ids[0],extraIds:ids.slice(1),updatedAt:now.toISOString()});
   return {ok:true,date,posted,updated:!posted,pages:pages.length};
  }catch(e){return {ok:false,date,error:'Daily agenda could not be posted: '+String(e.message||e).slice(0,200)};}
+}
+
+
+export async function sendStartReminders(now=new Date()){
+ const url=webhook();
+ if(!url||!validWebhook(url))return {ok:false,sent:0,error:'Discord webhook not configured.'};
+ const calendar=await getCalendar(),bucket=store();
+ const due=dueEventStarts(calendar.events,now,9);
+ let sent=0,skipped=0;const errors=[];
+ for(const e of due){
+  const key='start-alert/'+e.id+'/'+e.occurrenceDate+'-'+e.time;
+  try{
+   const claim=await bucket.setJSON(key,{status:'sending',at:now.toISOString()},{onlyIfNew:true});
+   if(!claim.modified){skipped++;continue;}
+   try{
+    await requestDiscord(url+'?wait=true','POST',discordStartPayload(e,now));
+    await bucket.setJSON(key,{status:'sent',at:now.toISOString()});
+    sent++;
+   }catch(err){
+    try{await bucket.delete(key);}catch(cleanErr){console.warn('Unable to release reminder claim:',cleanErr);}
+    errors.push(String(err.message||err).slice(0,160));
+   }
+  }catch(err){errors.push(String(err.message||err).slice(0,160));}
+ }
+ return {ok:errors.length===0,sent,skipped,due:due.length,errors};
 }
